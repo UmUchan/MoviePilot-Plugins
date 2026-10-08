@@ -1,10 +1,12 @@
+import json
+import urllib.error
+import urllib.request
 from typing import Any
 
 from app.schemas.types import EventType, NotificationType
 from app.sdk import scheduler as scheduler_sdk
 from app.sdk.events import Event, eventmanager
 from app.sdk.logging import logger
-from app.sdk.network import AsyncRequestUtils
 from app.sdk.plugin import _PluginBase
 
 
@@ -14,7 +16,7 @@ class GoogleChatWebhook(_PluginBase):
     plugin_name = "GoogleChat Webhook"
     plugin_desc = "消息通知转发到GoogleChat"
     plugin_icon = "https://raw.githubusercontent.com/umuchan/MoviePilot-Plugins/main/icons/Google_A.png"
-    plugin_version = "3.0.0"
+    plugin_version = "3.0.1"
     plugin_author = "Claude"
     author_url = "https://github.com/UmUchan"
     plugin_config_prefix = "googlechat_webhook_"
@@ -25,6 +27,8 @@ class GoogleChatWebhook(_PluginBase):
     _WEBHOOK_PREFIX = "https://chat.googleapis.com/"
     # Google Chat 单条文本上限约 4096 字符，留出余量
     _MAX_LENGTH = 4000
+    # 请求超时（秒）
+    _TIMEOUT = 10
     # 一次性测试任务 ID，stop_service 时用它取消未执行的任务
     _TEST_JOB_ID = "googlechat_test_once"
 
@@ -66,7 +70,7 @@ class GoogleChatWebhook(_PluginBase):
         return self._enabled and bool(self._google_chat_url)
 
     @eventmanager.register(EventType.NoticeMessage)
-    async def send(self, event: Event) -> None:
+    def send(self, event: Event) -> None:
         """收到通知事件后按消息类型过滤，并转发到 Google Chat。"""
         if not self.get_state():
             return
@@ -80,11 +84,13 @@ class GoogleChatWebhook(_PluginBase):
         if type_name and self._msgtypes and type_name not in self._msgtypes:
             return
 
-        await self._push(data.get("title"), data.get("text"))
+        self._push(data.get("title"), data.get("text"))
 
-    async def _send_test(self) -> None:
+    def _send_test(self) -> None:
         """发送一条测试消息，用来验证 Webhook 配置。"""
-        await self._push("GoogleChat 通知测试", "✅ 配置正确，之后的通知会转发到这里。")
+        logger.info("[GoogleChat] 开始发送测试消息")
+        if self._push("GoogleChat 通知测试", "✅ 配置正确，之后的通知会转发到这里。"):
+            logger.info("[GoogleChat] 测试消息发送成功")
 
     @staticmethod
     def _build_content(title: Any, text: Any) -> str:
@@ -98,7 +104,7 @@ class GoogleChatWebhook(_PluginBase):
             parts.append(text)
         return "\n".join(parts)
 
-    async def _push(self, title: Any, text: Any) -> bool:
+    def _push(self, title: Any, text: Any) -> bool:
         """向 Webhook 发送一条文本消息，返回是否成功；失败只记日志，不抛异常。"""
         content = self._build_content(title, text)
         if not content:
@@ -106,19 +112,30 @@ class GoogleChatWebhook(_PluginBase):
         if len(content) > self._MAX_LENGTH:
             content = content[: self._MAX_LENGTH] + "…"
 
+        request = urllib.request.Request(
+            self._google_chat_url,
+            data=json.dumps({"text": content}).encode("utf-8"),
+            headers={"Content-Type": "application/json; charset=UTF-8"},
+            method="POST",
+        )
         try:
-            res = await AsyncRequestUtils(timeout=10).post_res(
-                self._google_chat_url, json={"text": content}
-            )
+            with urllib.request.urlopen(request, timeout=self._TIMEOUT) as response:
+                status = response.status
+                response.read()
+        except urllib.error.HTTPError as err:
+            detail = err.read().decode("utf-8", "replace")[:200]
+            logger.error(f"[GoogleChat] 推送失败：HTTP {err.code} {detail}")
+            return False
+        except urllib.error.URLError as err:
+            logger.error(f"[GoogleChat] 推送失败：网络错误 {err.reason}")
+            return False
         except Exception as err:
-            logger.error(f"[GoogleChat] 推送异常：{err}")
+            # 只记录异常类型，避免异常信息里带出含密钥的 Webhook 地址
+            logger.error(f"[GoogleChat] 推送异常：{type(err).__name__}")
             return False
 
-        if res is None:
-            logger.error("[GoogleChat] 推送失败：没有收到响应（网络、代理或超时）")
-            return False
-        if res.status_code != 200:
-            logger.error(f"[GoogleChat] 推送失败：HTTP {res.status_code} {res.text[:200]}")
+        if status != 200:
+            logger.error(f"[GoogleChat] 推送失败：HTTP {status}")
             return False
         return True
 
@@ -219,9 +236,9 @@ class GoogleChatWebhook(_PluginBase):
             "msgtypes": [],
         }
 
-    def get_page(self) -> list[dict]:
-        """本插件没有详情页。"""
-        return []
+    def get_page(self) -> list[dict] | None:
+        # 没有详情页：保持空实现，点击插件会直接进入设置页
+        pass
 
     def stop_service(self) -> None:
         """取消尚未执行的测试任务；插件没有自建线程或客户端。"""
