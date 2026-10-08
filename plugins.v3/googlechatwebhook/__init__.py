@@ -8,7 +8,7 @@ from app.sdk.network import AsyncRequestUtils
 from app.sdk.plugin import _PluginBase
 
 
-class GoogleChatNotify(_PluginBase):
+class GoogleChatWebhook(_PluginBase):
     """监听 MoviePilot 的消息通知事件，并转发到 Google Chat Webhook。"""
 
     plugin_name = "GoogleChat Webhook"
