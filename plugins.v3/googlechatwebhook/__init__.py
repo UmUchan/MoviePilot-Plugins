@@ -11,7 +11,7 @@ from app.sdk.plugin import _PluginBase
 class GoogleChatNotify(_PluginBase):
     """监听 MoviePilot 的消息通知事件，并转发到 Google Chat Webhook。"""
 
-    plugin_name = "GoogleChat通知插件"
+    plugin_name = "GoogleChat Webhook"
     plugin_desc = "消息通知转发到GoogleChat"
     plugin_icon = "https://raw.githubusercontent.com/umuchan/MoviePilot-Plugins/main/icons/Google_A.png"
     plugin_version = "3.0.0"
