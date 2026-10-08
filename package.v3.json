@@ -1,6 +1,6 @@
 {
   "GoogleChatWebhook": {
-    "name": "GoogleChat通知插件",
+    "name": "GoogleChat Webhook",
     "description": "消息通知转发到GoogleChat",
     "labels": "消息通知",
     "version": "3.0.0",
