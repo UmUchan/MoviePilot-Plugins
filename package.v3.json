@@ -3,12 +3,13 @@
     "name": "GoogleChat Webhook",
     "description": "消息通知转发到GoogleChat",
     "labels": "消息通知",
-    "version": "3.0.0",
+    "version": "3.0.1",
     "icon": "https://raw.githubusercontent.com/umuchan/MoviePilot-Plugins/main/icons/Google_A.png",
     "author": "Claude",
     "level": 1,
     "system_version": ">=3.0.0",
     "history": {
+      "v3.0.1":"fix problems",
       "v3.0.0": "适配 MoviePilot V3：改用 app.sdk 接口和异步 HTTP；测试开关保存后自动复位；校验 Webhook 域名；失败时记录状态码。"
     }
   }
